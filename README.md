@@ -28,6 +28,7 @@ Each custom action lives in its own directory at the root of the repository. Ins
 Example Repository Layout
 Your actions repository could look something like this:
 
+```
 actions/
 │
 ├── .github/
@@ -42,5 +43,4 @@ actions/
 └── another-action/
     ├── action.yml
     └── entrypoint.sh
-
-
+```
