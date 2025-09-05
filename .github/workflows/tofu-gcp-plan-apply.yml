@@ -23,6 +23,15 @@ on:
         description: 'The directory where the Tofu commands will be run.'
         required: true
         type: string
+      tfvars_file:
+        description: 'Optional name of the .tfvars file to use.'
+        required: false
+        type: string
+        default: ''
+      allow_apply:
+        description: 'Set to true to allow the apply step to run.'
+        required: true
+        type: boolean
  
 jobs:
   tofu:
@@ -54,21 +63,30 @@ jobs:
             -backend-config="bucket=${{ inputs.gcp_state_bucket_name }}" \
             -upgrade
 
+      - name: Construct tfvars Argument
+        id: tfvars
+        run: |
+          if [[ -n "${{ inputs.tfvars_file }}" ]]; then
+            echo "arg=-var-file=${{ inputs.tfvars_file }}" >> $GITHUB_OUTPUT
+          else
+            echo "arg=" >> $GITHUB_OUTPUT
+          fi
+
       # This step only runs on pull requests. It generates a plan and saves it to a file.
       - name: Tofu Plan
         id: plan
-        working-directory: ${{ inputs.working_directory }}
-        run: tofu plan -no-color -out=plan.tfplan
         if: github.event_name == 'pull_request'
+        working-directory: ${{ inputs.working_directory }}
+        run: tofu plan ${{ steps.tfvars.outputs.arg }} -no-color -out=plan.tfplan
         # Continue even if the plan has changes, which would otherwise cause an exit code 2
         continue-on-error: true
 
       # This step takes the plan file and formats it for the comment.
       - name: Tofu Show
         id: show
+        if: steps.plan.outcome == 'success' && github.event_name == 'pull_request'
         working-directory: ${{ inputs.working_directory }}
         run: tofu show -no-color plan.tfplan
-        if: steps.plan.outcome == 'success' && github.event_name == 'pull_request'
 
       # This step uses the output from the 'show' step to create a comment on the PR.
       - name: Post Plan to PR
@@ -99,12 +117,12 @@ jobs:
 
       # This step checks the exit code of the plan to see if there are changes.
       - name: Check Plan Exit Code
-        run: exit ${{ steps.plan.exit-code }}
         if: steps.plan.outcome == 'success' && github.event_name == 'pull_request'
+        run: exit ${{ steps.plan.exit-code }}
 
       # This step runs on a push to main OR a manual dispatch.
       - name: Tofu Apply
+        if: inputs.allow_apply == true
         working-directory: ${{ inputs.working_directory }}
-        run: tofu apply -auto-approve -no-color
-        if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+        run: tofu apply ${{ steps.tfvars.outputs.arg }} -auto-approve -no-color
 
