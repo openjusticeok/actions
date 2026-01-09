@@ -1,0 +1,52 @@
+name: OpenTofu CI
+
+on:
+  workflow_call:
+    inputs:
+      tofu_version:
+        description: 'OpenTofu version to use.'
+        required: false
+        type: string
+        default: '1.8.1'
+      directories:
+        description: 'JSON list of directories to run validation in (e.g. ["dir1", "dir2"]).'
+        required: true
+        type: string
+
+jobs:
+  fmt:
+    name: Check Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ inputs.tofu_version }}
+
+      - name: Tofu Format
+        run: tofu fmt -check -recursive
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJSON(inputs.directories) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ inputs.tofu_version }}
+
+      - name: Init
+        working-directory: ${{ matrix.directory }}
+        run: tofu init -backend=false
+
+      - name: Validate
+        working-directory: ${{ matrix.directory }}
+        run: tofu validate

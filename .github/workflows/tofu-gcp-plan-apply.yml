@@ -15,6 +15,11 @@ on:
         description: 'The service account email for the Github Actions workflow to use.'
         required: true
         type: string
+      tofu_version:
+        description: 'OpenTofu version to use.'
+        required: false
+        type: string
+        default: '1.8.1'
       gcp_state_bucket_name:
         description: 'The name of the GCS bucket for Tofu state.'
         required: true
@@ -53,6 +58,8 @@ jobs:
 
       - name: Setup Tofu
         uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ inputs.tofu_version }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2

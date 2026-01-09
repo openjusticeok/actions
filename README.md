@@ -23,6 +23,7 @@ This workflow handles OpenTofu `plan` and `apply` operations for Google Cloud Pl
 | `gcp_project_id` | The GCP project ID. | Yes | - |
 | `gcp_wif_provider` | The full resource name of the WIF provider for Github Actions. | Yes | - |
 | `gcp_service_account` | The service account email for the Github Actions workflow to use. | Yes | - |
+| `tofu_version` | OpenTofu version to use. | No | `1.8.1` |
 | `gcp_state_bucket_name` | The name of the GCS bucket for Tofu state. | Yes | - |
 | `gcp_state_prefix` | Optional prefix (folder) in the GCS bucket for Tofu state. | No | `''` |
 | `working_directory` | The directory where the Tofu commands will be run. | Yes | - |
@@ -52,10 +53,41 @@ jobs:
       gcp_project_id: 'my-gcp-project'
       gcp_wif_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider'
       gcp_service_account: 'my-sa@my-gcp-project.iam.gserviceaccount.com'
+      tofu_version: '1.8.1'
       gcp_state_bucket_name: 'my-terraform-state-bucket'
       gcp_state_prefix: 'prod/infrastructure'
       working_directory: './infrastructure'
       allow_apply: ${{ github.ref == 'refs/heads/main' }}
+```
+
+### OpenTofu CI
+Located at: `.github/workflows/tofu-ci.yml`
+
+This workflow performs basic Continuous Integration checks for OpenTofu projects:
+1.  **Format Check:** Checks if all configuration files are formatted correctly (`tofu fmt`).
+2.  **Validation:** Runs `tofu validate` in specified directories to check for syntax and configuration validity.
+
+#### Inputs
+
+| Input | Description | Required | Default |
+| :--- | :--- | :---: | :---: |
+| `tofu_version` | OpenTofu version to use. | No | `1.8.1` |
+| `directories` | JSON list of directories to run validation in. | Yes | - |
+
+#### Usage Example
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  tofu-ci:
+    uses: openjusticeok/actions/.github/workflows/tofu-ci.yml@v1
+    with:
+      tofu_version: '1.8.1'
+      directories: '["modules/network", "modules/compute", "envs/dev"]'
 ```
 
 ## Repository Structure
