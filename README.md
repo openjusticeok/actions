@@ -9,38 +9,64 @@ The fundamental difference is what you are creating:
 
 - **Reusable Workflow**: An entire, pre-defined workflow file (including jobs and steps) that can be called and run by another workflow. It's defined by a standard .yml file with a workflow_call trigger.
 
-## Using Workflows and Custom Actions
+## Available Workflows
 
-- To call the workflow:
-  ```bash
-  uses: openjusticeok/actions/.github/workflows/tofu/plan-apply.yml@main
-  ```
-- To call the action:
-  ```bash
-  uses: openjusticeok/actions/setup-custom-tool@v1
-  ```
+### Tofu Plan & Apply for GCP
+Located at: `.github/workflows/tofu-gcp-plan-apply.yml`
+
+This workflow handles OpenTofu `plan` and `apply` operations for Google Cloud Platform. It supports Workload Identity Federation for authentication and GCS for state storage.
+
+#### Inputs
+
+| Input | Description | Required | Default |
+| :--- | :--- | :---: | :---: |
+| `gcp_project_id` | The GCP project ID. | Yes | - |
+| `gcp_wif_provider` | The full resource name of the WIF provider for Github Actions. | Yes | - |
+| `gcp_service_account` | The service account email for the Github Actions workflow to use. | Yes | - |
+| `gcp_state_bucket_name` | The name of the GCS bucket for Tofu state. | Yes | - |
+| `gcp_state_prefix` | Optional prefix (folder) in the GCS bucket for Tofu state. | No | `''` |
+| `working_directory` | The directory where the Tofu commands will be run. | Yes | - |
+| `tfvars_file` | Optional name of the .tfvars file to use. | No | `''` |
+| `allow_apply` | Set to true to allow the apply step to run. | Yes | - |
+
+#### Usage Example
+
+```yaml
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  tofu-gcp:
+    name: Call Tofu Workflow
+    uses: openjusticeok/actions/.github/workflows/tofu-gcp-plan-apply.yml@v1
+    with:
+      gcp_project_id: 'my-gcp-project'
+      gcp_wif_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider'
+      gcp_service_account: 'my-sa@my-gcp-project.iam.gserviceaccount.com'
+      gcp_state_bucket_name: 'my-terraform-state-bucket'
+      gcp_state_prefix: 'prod/infrastructure'
+      working_directory: './infrastructure'
+      allow_apply: ${{ github.ref == 'refs/heads/main' }}
+```
 
 ## Repository Structure
 
-Reusable Workflows live inside the .github/workflows/ directory.
-Each custom action lives in its own directory at the root of the repository. Inside that directory there is an action.yml file and any scripts or Dockerfiles it needs.
-
-Example Repository Layout
-Your actions repository could look something like this:
+Reusable Workflows live inside the `.github/workflows/` directory.
 
 ```
 actions/
-│
 ├── .github/
 │   └── workflows/
-│       └── tofu/
-│           └── plan-apply.yml      # <-- Your Reusable Workflow
-│
-├── setup-custom-tool/
-│   ├── action.yml                  # <-- Definition for a custom action
-│   └── main.js                     # <-- The script for the action
-│
-└── another-action/
-    ├── action.yml
-    └── entrypoint.sh
+│       └── tofu-gcp-plan-apply.yml  # <-- Reusable Workflow for GCP Tofu
+├── README.md
+└── NEWS.md
 ```
