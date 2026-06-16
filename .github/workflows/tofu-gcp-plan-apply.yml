@@ -1,11 +1,12 @@
 name: 'Tofu Plan & Apply for GCP'
-#  - pull_request: runs `tofu plan` and posts the result as a PR comment;
-#    init/plan failures are reported with a generic "check the workflow logs" note
+# what this workflow does:
+#  - on pull_request: runs `tofu plan` and posts the result as a comment
+#  - init or plan failure: comment shows the error text
 #  - -detailed-exitcode + fail-closed guard: red on a real error (1), green on
 #    no-changes (0) and changes-pending (2); the comment distinguishes all three
 #  - one comment posted per push, deep-linked to the run's job log
-#  - concurrency lock on state, timeout, -input=false, TF_IN_AUTOMATION
-#  - allow_apply opt-in (default false) + default-branch gate on apply
+#  - on a push to the default branch: runs `tofu apply` (gated by allow_apply)
+#  - guardrails: serialize runs on the same state, 30-min timeout, never prompt
 
 on:
   workflow_call:
@@ -47,9 +48,9 @@ on:
         default: ''
       allow_apply:
         description: 'Set to true to allow the apply step to run on push/dispatch events from the default branch.'
-        required: true   # note: github does not 'enforce' required on workflow_call inputs (T_T)
-        type: boolean    #   so an unset boolean reads as false...
-        default: true    #   apply is opt-in... blank means no deploys
+        required: true   # note: github does not actually enforce required on workflow_call inputs
+        type: boolean
+        default: true    #   apply runs by default; a caller passes `false` to opt out
 
 jobs:
   tofu:
@@ -65,16 +66,16 @@ jobs:
     env:
       TF_IN_AUTOMATION: 'true'
 
-    # serialize runs that touch the same state (working dir + ref) so a plan and
-    #   an apply never race the same opentofu state.... applies are not cancelled
-    #   mid-run to avoid leaving partial state behind
+    # serialize so only one run at a time per state (working dir + branch) so a plan and
+    #   an apply can't fight over the same state file... a running apply is never
+    #   cancelled, to avoid leaving the state half-written
     concurrency:
       group: tofu-gcp-${{ inputs.working_directory }}-${{ github.ref }}
       cancel-in-progress: false
 
     permissions:
       contents: read
-      actions: read        # read the run's jobs to deep-link the comment to the log
+      actions: read        # lets the comment step read the run's jobs to build a log link
       id-token: write      # required for workload identity federation
       pull-requests: write # required to post comments on prs
 
@@ -97,23 +98,28 @@ jobs:
           service_account: ${{ inputs.gcp_service_account }}
 
       # INIT
-      # failure comments are generic, so there is no captured log to embed...
-      # ...the plain command's own exit code is what the step reports
-      # init has no continue-on-error, so a failure reddens the job by itself;
-      # the comment step below still runs via !cancelled() to report it
+      # each command's output is copied to a log file with `| tee <file>.log`, so
+      #   the PR comment can quote the real error later
+      # on `shell: bash`:
+      #   github's default shell ignores a command that fails
+      #   before a pipe, so `tofu | tee` would look successful even when tofu
+      #   failed (tee itself always succeeds), hiding the error. `shell: bash` turns
+      #   on `pipefail`, which makes the step fail when tofu fails
       - name: Tofu Init
         id: init
+        shell: bash
         working-directory: ${{ inputs.working_directory }}
         run: |
+          set -o pipefail
           if [[ -n "${{ inputs.gcp_state_prefix }}" ]]; then
             tofu init -input=false \
               -backend-config="bucket=${{ inputs.gcp_state_bucket_name }}" \
               -backend-config="prefix=${{ inputs.gcp_state_prefix }}" \
-              -upgrade
+              -upgrade 2>&1 | tee init_output.log
           else
             tofu init -input=false \
               -backend-config="bucket=${{ inputs.gcp_state_bucket_name }}" \
-              -upgrade
+              -upgrade 2>&1 | tee init_output.log
           fi
 
       - name: Construct tfvars Argument
@@ -126,18 +132,21 @@ jobs:
           fi
 
       # PLAN (pull requests only)
-
-      # -detailed-exitcode makes the plan's exit code meaningful:
-      #   0 = success, no changes | 1 = error | 2 = success, changes pending
-      #   because exit code 2 is non-zero, continue-on-error keeps the job alive
-      #   and `steps.plan.outcome` reads 'failure' for the normal changes case....
-      #   the comment step keys off `steps.plan.outputs.exitcode`; only the
-      #   fail-closed guard below uses `outcome`
+      # `-detailed-exitcode` gives plan a meaningful exit code:
+      #   0 = no changes, 1 = error, 2 = there are changes to apply
+      # exit 2 looks like a failure to github, so `continue-on-error` keeps the job
+      #   alive and we decide red/green ourselves below
+      # opentofu writes error messages to stderr by default
+      #   2>&1 redirects stderr to stdout so both output streams
+      #   are captured by the pipe into the log file
       - name: Tofu Plan
         id: plan
         if: github.event_name == 'pull_request'
+        shell: bash   # for pipefail (see the init step)
         working-directory: ${{ inputs.working_directory }}
-        run: tofu plan ${{ steps.tfvars.outputs.arg }} -input=false -no-color -detailed-exitcode -out=plan.tfplan
+        run: |
+          set -o pipefail
+          tofu plan ${{ steps.tfvars.outputs.arg }} -input=false -no-color -detailed-exitcode -out=plan.tfplan 2>&1 | tee plan_output.log
         continue-on-error: true
 
       # render the saved plan only when there are changes to show (exit code 2)
@@ -162,25 +171,48 @@ jobs:
           PLAN: ${{ steps.show.outputs.stdout }}
           ACTOR: ${{ github.actor }}
           EVENT_NAME: ${{ github.event_name }}
+          # the folder the log files were written in... tailOf() reads them from here
+          WORKING_DIR: ${{ inputs.working_directory }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            // need to read the log files that tee wrote, so we need fs and path helpers
+            const fs = require('fs');
+            const path = require('path');
             const footer = `*Pushed by: @${process.env.ACTOR}, Action: \`${process.env.EVENT_NAME}\`*`;
             const initOutcome = process.env.INIT_OUTCOME;
             const exitCode = process.env.PLAN_EXITCODE;
 
-            // deep link to this run's job log; fall back to the run page if the
-            //   jobs api is unavailable (needs `actions: read`)....
-            //   never throw a missing link must not break comment posting
+            // grab the last chunk of a captured log (tofu prints the error last)
+            function tailOf(file, maxChars = 6000) {
+              try {
+                const t = fs.readFileSync(path.join(process.env.WORKING_DIR, file), 'utf8');
+                return t.length > maxChars
+                  ? '…(truncated — full output in workflow logs)\n' + t.slice(-maxChars)
+                  : t;
+              } catch { return '(output log not found — see workflow logs)'; }
+            }
+
+            // link the comment to this run's logs... job lookup needs `actions: read` permission
+            //  the link jumps straight to the log output for the relevant step
             let logLink = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const failedStepName = initOutcome === 'failure' ? 'Tofu Init'
+                                 : exitCode === '1'          ? 'Tofu Plan'
+                                 : null;
             try {
+              // find this run's jobs
               const { data } = await github.rest.actions.listJobsForWorkflowRun({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 run_id: context.runId,
               });
               const job = data.jobs.find(j => j.status === 'in_progress') || data.jobs[0];
-              if (job && job.html_url) logLink = job.html_url;
+              if (job && job.html_url) {
+                logLink = job.html_url; // use the precise job url
+                // if a step failed, anchor to it so the link opens that step's log
+                const step = failedStepName && job.steps && job.steps.find(s => s.name === failedStepName);
+                if (step) logLink += `#step:${step.number}:1`;
+              }
             } catch (e) { /* keep the run-level fallback */ }
             const logsLine = `[View the run logs](${logLink})`;
 
@@ -194,7 +226,13 @@ jobs:
                 '- Authentication credentials are invalid or expired',
                 '- The state bucket is unreachable',
                 '',
-                '**Check the workflow logs for the specific error.**',
+                '<details><summary>Error output (tail)</summary>',
+                '',
+                '```text',
+                tailOf('init_output.log'),
+                '```',
+                '',
+                '</details>',
                 '',
                 logsLine,
                 '',
@@ -207,7 +245,13 @@ jobs:
                 'The `tofu plan` command failed. This usually means a configuration',
                 'error in the Terraform/OpenTofu files.',
                 '',
-                '**Check the workflow logs for the specific error message.**',
+                '<details><summary>Error output (tail)</summary>',
+                '',
+                '```text',
+                tailOf('plan_output.log'),
+                '```',
+                '',
+                '</details>',
                 '',
                 'This must be resolved before the PR can be merged.',
                 '',
@@ -296,7 +340,7 @@ jobs:
       # APPLY (push or manual dispatch, default branch only)
 
       # two gates, both required:
-      #   1. allow_apply: the caller's written opt-in (default false)
+      #   1. allow_apply: the caller's written opt-in (default true)
       #   2. default branch: run workflow can be dispatched from any branch in
       #      the actions ui.. without this gate, a side branch's unreviewed,
       #      never-planned tofu could be applied straight to the project
@@ -310,6 +354,7 @@ jobs:
         run: tofu apply ${{ steps.tfvars.outputs.arg }} -input=false -auto-approve -no-color
 
       # JOB SUMMARY
+      # a simple status table on the run's actions page
       - name: Write Job Summary
         if: always()
         run: |
