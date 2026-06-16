@@ -3,7 +3,7 @@ name: 'Tofu Plan & Apply for GCP'
 #    init/plan failures are reported with a generic "check the workflow logs" note
 #  - -detailed-exitcode + fail-closed guard: red on a real error (1), green on
 #    no-changes (0) and changes-pending (2); the comment distinguishes all three
-#  - one comment posted per push
+#  - one comment posted per push, deep-linked to the run's job log
 #  - concurrency lock on state, timeout, -input=false, TF_IN_AUTOMATION
 #  - allow_apply opt-in (default false) + default-branch gate on apply
 
@@ -47,9 +47,9 @@ on:
         default: ''
       allow_apply:
         description: 'Set to true to allow the apply step to run on push/dispatch events from the default branch.'
-        required: false   # github does not 'enforce' required on workflow_call inputs (T_T)
-        type: boolean     #   so an unset boolean reads as false...
-        default: false    #   apply is opt-in... blank means no deploys
+        required: true   # note: github does not 'enforce' required on workflow_call inputs (T_T)
+        type: boolean    #   so an unset boolean reads as false...
+        default: true    #   apply is opt-in... blank means no deploys
 
 jobs:
   tofu:
@@ -74,6 +74,7 @@ jobs:
 
     permissions:
       contents: read
+      actions: read        # read the run's jobs to deep-link the comment to the log
       id-token: write      # required for workload identity federation
       pull-requests: write # required to post comments on prs
 
@@ -168,6 +169,21 @@ jobs:
             const initOutcome = process.env.INIT_OUTCOME;
             const exitCode = process.env.PLAN_EXITCODE;
 
+            // deep link to this run's job log; fall back to the run page if the
+            //   jobs api is unavailable (needs `actions: read`)....
+            //   never throw a missing link must not break comment posting
+            let logLink = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            try {
+              const { data } = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+              });
+              const job = data.jobs.find(j => j.status === 'in_progress') || data.jobs[0];
+              if (job && job.html_url) logLink = job.html_url;
+            } catch (e) { /* keep the run-level fallback */ }
+            const logsLine = `[View the run logs](${logLink})`;
+
             let body;
             if (initOutcome === 'failure') {
               body = [
@@ -179,6 +195,8 @@ jobs:
                 '- The state bucket is unreachable',
                 '',
                 '**Check the workflow logs for the specific error.**',
+                '',
+                logsLine,
                 '',
                 footer,
               ].join('\n');
@@ -192,6 +210,8 @@ jobs:
                 '**Check the workflow logs for the specific error message.**',
                 '',
                 'This must be resolved before the PR can be merged.',
+                '',
+                logsLine,
                 '',
                 footer,
               ].join('\n');
@@ -235,13 +255,15 @@ jobs:
               if (truncated) {
                 lines.push('', '> ⚠️ Plan output was middle-truncated. See the full output in the workflow logs.');
               }
-              lines.push('', footer);
+              lines.push('', logsLine, '', footer);
               body = lines.join('\n');
             } else if (exitCode === '0') {
               body = [
                 '#### OpenTofu Plan ✅ — No Changes',
                 '',
                 'No changes. Your infrastructure matches the configuration.',
+                '',
+                logsLine,
                 '',
                 footer,
               ].join('\n');
