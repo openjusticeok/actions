@@ -28,7 +28,7 @@ This workflow handles OpenTofu `plan` and `apply` operations for Google Cloud Pl
 | `gcp_state_prefix` | Optional prefix (folder) in the GCS bucket for Tofu state. | No | `''` |
 | `working_directory` | The directory where the Tofu commands will be run. | Yes | - |
 | `tfvars_file` | Optional name of the .tfvars file to use. | No | `''` |
-| `allow_apply` | Set to true to allow the apply step to run. | Yes | - |
+| `allow_apply` | Set to true to allow the apply step to run. | No | `true` |
 
 #### Usage Example
 

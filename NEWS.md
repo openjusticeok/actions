@@ -1,5 +1,10 @@
 # News
 
+## v1.2.1 (2026-06-29)
+
+### Fixes
+- Mark `allow_apply` as optional (`required: false`) in `tofu-gcp-plan-apply.yml`. Combining `required: true` with a `default` value caused a `startup_failure` when the reusable workflow was called.
+
 ## v1.2.0 (2026-06-29)
 
 ### New Features

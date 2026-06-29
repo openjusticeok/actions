@@ -48,9 +48,9 @@ on:
         default: ''
       allow_apply:
         description: 'Set to true to allow the apply step to run on push/dispatch events from the default branch.'
-        required: true   # note: github does not actually enforce required on workflow_call inputs
+        required: false
         type: boolean
-        default: true    #   apply runs by default; a caller passes `false` to opt out
+        default: true    # apply runs by default; a caller passes `false` to opt out
 
 jobs:
   tofu:
@@ -126,9 +126,9 @@ jobs:
         id: tfvars
         run: |
           if [[ -n "${{ inputs.tfvars_file }}" ]]; then
-            echo "arg=-var-file=${{ inputs.tfvars_file }}" >> $GITHUB_OUTPUT
+            echo "arg=-var-file=${{ inputs.tfvars_file }}" >> "$GITHUB_OUTPUT"
           else
-            echo "arg=" >> $GITHUB_OUTPUT
+            echo "arg=" >> "$GITHUB_OUTPUT"
           fi
 
       # PLAN (pull requests only)
