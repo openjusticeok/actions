@@ -1,0 +1,53 @@
+name: Targets CI
+
+on:
+  workflow_call:
+    inputs:
+      r_version:
+        description: 'R version to use.'
+        required: false
+        type: string
+        default: '4.5'
+      working_directory:
+        description: 'Directory to run checks in.'
+        required: false
+        type: string
+        default: '.'
+      run_tar_make:
+        description: 'Run tar_make() after validation.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  targets-validate:
+    name: Validate targets pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Cache rv library
+        uses: actions/cache@v4
+        with:
+          path: rv/
+          key: rv-${{ runner.os }}-${{ hashFiles('rv.lock') }}
+
+      - name: Sync R dependencies
+        run: nix develop --command rv sync
+        working-directory: ${{ inputs.working_directory }}
+
+      - name: Validate targets pipeline
+        run: nix develop --command rv run --no-sync -e 'targets::tar_validate()'
+        working-directory: ${{ inputs.working_directory }}
+
+      - name: Run targets pipeline
+        if: inputs.run_tar_make
+        run: nix develop --command rv run --no-sync -e 'targets::tar_make()'
+        working-directory: ${{ inputs.working_directory }}

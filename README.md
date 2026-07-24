@@ -60,6 +60,77 @@ jobs:
       allow_apply: ${{ github.ref == 'refs/heads/main' }}
 ```
 
+### R CI
+Located at: `.github/workflows/r-ci.yml`
+
+This workflow performs style checks for R projects using the tools from the OPI Nix flake:
+1.  **Format Check:** Checks if all R files are formatted correctly with `air`.
+2.  **Lint:** Runs `jarl` to catch common R issues.
+
+#### Inputs
+
+| Input | Description | Required | Default |
+| :--- | :--- | :---: | :---: |
+| `r_version` | R version to use. | No | `4.5` |
+| `working_directory` | Directory to run checks in. | No | `.` |
+
+#### Usage Example
+
+```yaml
+name: R CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  r-ci:
+    uses: openjusticeok/actions/.github/workflows/r-ci.yml@v1
+    with:
+      working_directory: '.'
+```
+
+### Targets CI
+Located at: `.github/workflows/targets-ci.yml`
+
+This workflow validates a [`targets`](https://docs.ropensci.org/targets/) pipeline for R projects:
+1.  **Dependency Sync:** Runs `rv sync` to install the R packages captured in `rv.lock`.
+2.  **Pipeline Validation:** Runs `targets::tar_validate()` to check the pipeline definition.
+3.  **Optional Run:** Can optionally run `targets::tar_make()` via the `run_tar_make` input.
+
+The `rv/` library is cached between runs using the hash of `rv.lock` as the cache key.
+
+#### Inputs
+
+| Input | Description | Required | Default |
+| :--- | :--- | :---: | :---: |
+| `r_version` | R version to use. | No | `4.5` |
+| `working_directory` | Directory to run checks in. | No | `.` |
+| `run_tar_make` | Run `tar_make()` after validation. | No | `false` |
+
+#### Usage Example
+
+```yaml
+name: Targets CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  targets-ci:
+    uses: openjusticeok/actions/.github/workflows/targets-ci.yml@v1
+    with:
+      working_directory: '.'
+      run_tar_make: false
+```
+
 ### OpenTofu CI
 Located at: `.github/workflows/tofu-ci.yml`
 

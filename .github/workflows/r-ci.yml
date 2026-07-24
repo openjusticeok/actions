@@ -1,0 +1,47 @@
+name: R CI
+
+on:
+  workflow_call:
+    inputs:
+      r_version:
+        description: 'R version to use.'
+        required: false
+        type: string
+        default: '4.5'
+      working_directory:
+        description: 'Directory to run checks in.'
+        required: false
+        type: string
+        default: '.'
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    name: Check R formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Check formatting
+        run: nix develop --command air format --check .
+        working-directory: ${{ inputs.working_directory }}
+
+  lint:
+    name: Lint R code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Run Jarl
+        run: nix develop --command jarl check .
+        working-directory: ${{ inputs.working_directory }}

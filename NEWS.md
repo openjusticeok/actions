@@ -1,5 +1,16 @@
 # News
 
+## v1.3.0 (2026-07-23) 
+
+### New Features
+- Added the `r-ci.yml` reusable workflow for R formatting (`air`) and linting (`jarl`) checks.
+- Added the `targets-ci.yml` reusable workflow for validating `targets` pipelines, including `rv sync`, `targets::tar_validate()`, and an optional `targets::tar_make()` step.
+- Both workflows use the OPI Nix flake via `nix develop` and the `cachix/install-nix-action@v31` action.
+- `targets-ci.yml` caches the `rv/` library between runs using `rv.lock` as the cache key.
+
+### Updates
+- Expanded README documentation for the new R CI and Targets CI workflows.
+
 ## v1.2.1 (2026-06-29)
 
 ### Fixes
