@@ -1,5 +1,10 @@
 # News
 
+## v1.3.2 (2026-07-24)
+
+### Fixes
+- The `targets-ci.yml` workflow now caches the `~/.cache/rv` build cache in addition to the `rv/` project library, and the cache key includes both `rv.lock` and `flake.lock`. This avoids rebuilding R packages from source on every CI run when the Nix dev shell forces source builds.
+
 ## v1.3.1 (2026-07-23)
 
 ### New Features

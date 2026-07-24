@@ -111,7 +111,7 @@ This workflow validates a [`targets`](https://docs.ropensci.org/targets/) pipeli
 2.  **Pipeline Validation:** Runs `targets::tar_validate()` to check the pipeline definition.
 3.  **Optional Run:** Can optionally run `targets::tar_make()` via the `run_tar_make` input.
 
-The Nix dev shell is configured to pull from the `okpolicy` Cachix binary cache. The `rv/` library is also cached between runs using the hash of `rv.lock` as the cache key.
+The Nix dev shell is configured to pull from the `okpolicy` Cachix binary cache. The `rv/` project library and the `~/.cache/rv` build cache are cached between runs using the hash of `rv.lock` and `flake.lock` as the cache key.
 
 #### Inputs
 

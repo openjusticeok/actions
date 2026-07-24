@@ -47,7 +47,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: rv/
-          key: rv-${{ runner.os }}-${{ hashFiles('rv.lock') }}
+          key: rv-${{ runner.os }}-${{ hashFiles('rv.lock', 'flake.lock') }}
+
+      - name: Cache rv build cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/rv
+          key: rv-build-${{ runner.os }}-${{ hashFiles('rv.lock', 'flake.lock') }}
 
       - name: Sync R dependencies
         run: nix develop --command rv sync
