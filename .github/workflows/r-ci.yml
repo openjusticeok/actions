@@ -13,6 +13,10 @@ on:
         required: false
         type: string
         default: '.'
+    secrets:
+      cachix_auth_token:
+        description: 'Cachix authentication token for pushing to the binary cache.'
+        required: false
 
 permissions:
   contents: read
@@ -28,6 +32,12 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v31
 
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: okpolicy
+          authToken: ${{ secrets.cachix_auth_token }}
+
       - name: Check formatting
         run: nix develop --command air format --check .
         working-directory: ${{ inputs.working_directory }}
@@ -41,6 +51,12 @@ jobs:
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: okpolicy
+          authToken: ${{ secrets.cachix_auth_token }}
 
       - name: Run Jarl
         run: nix develop --command jarl check .

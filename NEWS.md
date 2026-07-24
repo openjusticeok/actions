@@ -1,6 +1,15 @@
 # News
 
-## v1.3.0 (2026-07-23) 
+## v1.3.1 (2026-07-23)
+
+### New Features
+- Added Cachix binary cache support to `r-ci.yml` and `targets-ci.yml` via `cachix/cachix-action@v17`.
+- The `okpolicy` Cachix cache is used to pull and push the OPI Nix dev shell derivations.
+
+### Updates
+- Documented the `cachix_auth_token` secret in the README for both R CI and Targets CI workflows.
+
+## v1.3.0 (2026-07-23)
 
 ### New Features
 - Added the `r-ci.yml` reusable workflow for R formatting (`air`) and linting (`jarl`) checks.

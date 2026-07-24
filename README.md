@@ -67,12 +67,20 @@ This workflow performs style checks for R projects using the tools from the OPI 
 1.  **Format Check:** Checks if all R files are formatted correctly with `air`.
 2.  **Lint:** Runs `jarl` to catch common R issues.
 
+The Nix dev shell is configured to pull from the `okpolicy` Cachix binary cache. Pass `CACHIX_AUTH_TOKEN` to push newly built derivations back to the cache.
+
 #### Inputs
 
 | Input | Description | Required | Default |
 | :--- | :--- | :---: | :---: |
 | `r_version` | R version to use. | No | `4.5` |
 | `working_directory` | Directory to run checks in. | No | `.` |
+
+#### Secrets
+
+| Secret | Description | Required |
+| :--- | :--- | :---: |
+| `cachix_auth_token` | Cachix authentication token for pushing to the binary cache. | No |
 
 #### Usage Example
 
@@ -91,6 +99,8 @@ jobs:
     uses: openjusticeok/actions/.github/workflows/r-ci.yml@v1
     with:
       working_directory: '.'
+    secrets:
+      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 ```
 
 ### Targets CI
@@ -101,7 +111,7 @@ This workflow validates a [`targets`](https://docs.ropensci.org/targets/) pipeli
 2.  **Pipeline Validation:** Runs `targets::tar_validate()` to check the pipeline definition.
 3.  **Optional Run:** Can optionally run `targets::tar_make()` via the `run_tar_make` input.
 
-The `rv/` library is cached between runs using the hash of `rv.lock` as the cache key.
+The Nix dev shell is configured to pull from the `okpolicy` Cachix binary cache. The `rv/` library is also cached between runs using the hash of `rv.lock` as the cache key.
 
 #### Inputs
 
@@ -110,6 +120,12 @@ The `rv/` library is cached between runs using the hash of `rv.lock` as the cach
 | `r_version` | R version to use. | No | `4.5` |
 | `working_directory` | Directory to run checks in. | No | `.` |
 | `run_tar_make` | Run `tar_make()` after validation. | No | `false` |
+
+#### Secrets
+
+| Secret | Description | Required |
+| :--- | :--- | :---: |
+| `cachix_auth_token` | Cachix authentication token for pushing to the binary cache. | No |
 
 #### Usage Example
 
@@ -129,6 +145,8 @@ jobs:
     with:
       working_directory: '.'
       run_tar_make: false
+    secrets:
+      cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 ```
 
 ### OpenTofu CI
